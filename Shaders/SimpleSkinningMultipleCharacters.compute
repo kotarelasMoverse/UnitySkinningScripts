@@ -1,0 +1,46 @@
+#pragma kernel SimpleSkinningMultipleCharacters
+
+RWStructuredBuffer<float> _VertexBuffer;
+
+// RWStructuredBuffer<float4> _AnimatedJointPositionsRet;
+// RWStructuredBuffer<float4> _VerticesOffsetsWithJointsRet;
+// RWStructuredBuffer<int> _IdsOfInfluenceJointsPerVertexRet;
+// RWStructuredBuffer<float4x4> _JointsAccumulatedRotationsRet;
+
+int _NumVertices;
+int _NumCharacters;
+int _NumJoints;
+StructuredBuffer<float4> _AnimatedJointPositions;
+StructuredBuffer<float4> _VerticesOffsetsWithJoints; // only with the joint with the largest weight
+StructuredBuffer<int> _IdsOfInfluenceJointsPerVertex; // only with the joint with the largest weight
+StructuredBuffer<float4x4> _JointsAccumulatedRotations;
+
+[numthreads(1024,1,1)]
+void SimpleSkinningMultipleCharacters (uint3 id : SV_DispatchThreadID)
+{
+
+    if ((id.x < _NumVertices) && (id.y < _NumCharacters)) {
+
+        int influenceJointId = _IdsOfInfluenceJointsPerVertex[id.x + id.y * _NumVertices];
+
+        
+        _VertexBuffer[id.x*3 + 0 + id.y * _NumVertices * 3] = (mul(_JointsAccumulatedRotations[influenceJointId + id.y * _NumJoints], _VerticesOffsetsWithJoints[id.x + id.y * _NumVertices]) + _AnimatedJointPositions[influenceJointId + id.y * _NumJoints])[0];
+        _VertexBuffer[id.x*3 + 1 + id.y * _NumVertices * 3] = (mul(_JointsAccumulatedRotations[influenceJointId + id.y * _NumJoints], _VerticesOffsetsWithJoints[id.x + id.y * _NumVertices]) + _AnimatedJointPositions[influenceJointId + id.y * _NumJoints])[1];
+        _VertexBuffer[id.x*3 + 2 + id.y * _NumVertices * 3] = (mul(_JointsAccumulatedRotations[influenceJointId + id.y * _NumJoints], _VerticesOffsetsWithJoints[id.x + id.y * _NumVertices]) + _AnimatedJointPositions[influenceJointId + id.y * _NumJoints])[2];
+
+        // _VertexBuffer[id.x*3 + 0] = (_VerticesOffsetsWithJoints[id.x] + _AnimatedJointPositions[influenceJointId])[0];
+        // _VertexBuffer[id.x*3 + 1] = (_VerticesOffsetsWithJoints[id.x] + _AnimatedJointPositions[influenceJointId])[1];
+        // _VertexBuffer[id.x*3 + 2] = (_VerticesOffsetsWithJoints[id.x] + _AnimatedJointPositions[influenceJointId])[2];
+
+        // _VertexBuffer[id.x] = _VerticesOffsetsWithJoints[id.x] + _AnimatedJointPositions[influenceJointId];
+
+        // _AnimatedJointPositionsRet[id.x] = _AnimatedJointPositions[influenceJointId];
+
+        // _VerticesOffsetsWithJointsRet[id.x] = _VerticesOffsetsWithJoints[id.x];
+
+        // _IdsOfInfluenceJointsPerVertexRet[id.x] = influenceJointId;
+
+        // _JointsAccumulatedRotationsRet[id.x] = transpose(_JointsAccumulatedRotations[influenceJointId]);
+    }
+    
+}

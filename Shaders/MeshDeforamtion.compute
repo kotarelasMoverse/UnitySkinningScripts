@@ -1,0 +1,20 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel MoveVerticesRandomly
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+RWStructuredBuffer<float> _VertexBuffer;
+int _NumVertices;
+float _RandomFloat;
+
+[numthreads(8,1,1)]
+void MoveVerticesRandomly (uint3 id : SV_DispatchThreadID)
+{
+    // TODO: insert actual code here!
+
+    if (id.x < _NumVertices) {
+        _VertexBuffer[id.x*3 + 0] = 0;//_VertexBuffer[id.x*3 + 0] + _RandomFloat;
+        _VertexBuffer[id.x*3 + 1] = 0;//_VertexBuffer[id.x*3 + 1];
+        _VertexBuffer[id.x*3 + 2] = 0;//_VertexBuffer[id.x*3 + 2];
+    }
+}

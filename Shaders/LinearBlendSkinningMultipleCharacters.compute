@@ -1,0 +1,34 @@
+#pragma kernel LinearBlendSkinningMultipleCharacters
+
+RWStructuredBuffer<float4> _VertexBuffer;
+
+uint _NumVertices;
+uint _NumCharacters;
+int _NumJoints;
+uint _NumInfluenceJoints;
+StructuredBuffer<float4> _AnimatedJointPositions;
+StructuredBuffer<float4x4> _JointsAccumulatedRotations;
+StructuredBuffer<float4> _VerticesOffsetsAtTPose;
+StructuredBuffer<int> _InfluenceJointsIdsPerVertex;
+StructuredBuffer<float> _SkinningWeightsPerVertex;
+
+[numthreads(1024,1,1)]
+void LinearBlendSkinningMultipleCharacters (uint3 id : SV_DispatchThreadID)
+{
+
+    if ((id.x < _NumVertices) && (id.y < _NumCharacters) && (id.z < _NumInfluenceJoints)) {
+
+        _VertexBuffer[id.x + id.y * _NumVertices] = 0;
+
+        [loop] for (uint j=0; j<_NumInfluenceJoints; j++) {
+
+            int influenceJointId = _InfluenceJointsIdsPerVertex[id.x*4 + j];
+
+            _VertexBuffer[id.x + id.y * _NumVertices] += _SkinningWeightsPerVertex[id.x*4 + j] * (mul(_JointsAccumulatedRotations[influenceJointId + id.y * _NumJoints], _VerticesOffsetsAtTPose[id.x*4 + j + id.y * _NumVertices * 4]) + _AnimatedJointPositions[influenceJointId + id.y * _NumJoints]);
+        }
+
+        // int influenceJointId = _InfluenceJointsIdsPerVertex[id.x*4 + id.z];
+        // _VertexBuffer[id.x + id.y * _NumVertices] += _SkinningWeightsPerVertex[id.x*4 + id.z] * (mul(_JointsAccumulatedRotations[influenceJointId + id.y * _NumJoints], _VerticesOffsetsAtTPose[id.x*4 + id.z + id.y * _NumVertices * 4]) + _AnimatedJointPositions[influenceJointId + id.y * _NumJoints]);
+        
+    }
+}
