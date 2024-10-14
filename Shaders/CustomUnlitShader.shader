@@ -2,8 +2,8 @@ Shader "Unlit/CustomUnlitShader"
 {
     Properties
     {
-        _MainTex ("Texture", 2D) = "white" {}
         _ModelID ("_ModelID", Integer) = 0
+        _Color ("Main Color", Color) = (1,1,1,1)
     }
     SubShader
     {
@@ -24,7 +24,6 @@ Shader "Unlit/CustomUnlitShader"
             struct appdata
             {
                 float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
                 uint vid : SV_VertexID;
             };
 
@@ -32,8 +31,6 @@ Shader "Unlit/CustomUnlitShader"
 
             struct v2f
             {
-                float2 uv : TEXCOORD0;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
             };
 
@@ -46,17 +43,15 @@ Shader "Unlit/CustomUnlitShader"
                 v2f o;
                 float3 newPos = float3(_NewVertexPosBuffer[v.vid + 6890*_ModelID][0], _NewVertexPosBuffer[v.vid + 6890*_ModelID][1], _NewVertexPosBuffer[v.vid + 6890*_ModelID][2]);
                 o.vertex = UnityObjectToClipPos(newPos);
-                o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-                UNITY_TRANSFER_FOG(o,o.vertex);
                 return o;
             }
+
+            fixed4 _Color;
 
             fixed4 frag (v2f i) : SV_Target
             {
                 // sample the texture
-                fixed4 col = tex2D(_MainTex, i.uv);
-                // apply fog
-                UNITY_APPLY_FOG(i.fogCoord, col);
+                fixed4 col = _Color;
                 return col;
             }
             ENDCG
