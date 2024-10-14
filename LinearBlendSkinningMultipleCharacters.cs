@@ -4,6 +4,7 @@ using UnityEngine;
 using System;
 using UnityEngine.UIElements;
 using Unity.VisualScripting;
+using Unity.Mathematics;
 
 public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
 {   
@@ -52,7 +53,7 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         };
 
     int NUMBER_OF_INFLUENCE_JOINTS = 4;
-    float[] flattenedVertices;
+    Material customMaterial;
 
     // Start is called before the first frame update
     void Start()
@@ -157,6 +158,16 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
             initialSkeletonsPositions[i] = skeletons[i].transform.position;
         }
 
+        customMaterial = Instantiate(Resources.Load("CustomUnlitMaterial")) as Material;
+        for (int sk=0; sk<numberOfCharacters; sk++) {
+            skeletonMeshes[sk].GetComponent<MeshRenderer>().material = customMaterial;
+            skeletonMeshes[sk].GetComponent<MeshRenderer>().material.SetInteger("_ModelID", sk);
+        }
+        // skeletonMeshes[0].GetComponent<MeshRenderer>().material = customMaterial;
+        // skeletonMeshes[0].GetComponent<MeshRenderer>().material.SetInteger("_ModelID", 0);
+        // skeletonMeshes[1].GetComponent<MeshRenderer>().material = customMaterial;
+        // skeletonMeshes[1].GetComponent<MeshRenderer>().material.SetInteger("_ModelID", 1);
+
         // Extract the animation parameters from the character model that is moved by the animator
         animationParamsDance = ExtractAnimationParametersFromAnimatedModel(animatedModelRootDance, skeletonArrayBoneIdToHierarchyBoneId);
         animationParamsKobe = ExtractAnimationParametersFromAnimatedModel(animatedModelRootKobe, skeletonArrayBoneIdToHierarchyBoneId);
@@ -177,11 +188,7 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
 
 
         // Apply the animation parameters to the skeleton with hierarchy
-        // Utils.AnimateSkeletonWithHierarchy(skeletonWithHierarchy.transform, animationParams, inputBones);
-
         // Get the accumulated rotations that each joint will impose to the vertices that it influences
-        // jointsAccumulatedRotations = Utils.GetJointsAccumulatedRotations(animationParams, paths, inputBones.Length);
-
         allSkeletonsJointsAccumulatedRotations = Utils.AnimateMultipleSkeletonsWithHierarchy(skeletons, allAnimationParams, hierarchyBoneIdToSkeletonArrayBoneId, paths);
 
         // Get the animated joint positions in an array of Vector4s
@@ -201,8 +208,14 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         for (int sk=0; sk<skeletons.Length; sk++) {
             skeletonMeshes[sk].GetComponent<MeshFilter>().mesh.vertices = linearBlendSkinnedSkeletonMeshesVerticesWithHierarchy[sk];
         }
-        
 
+        Vector3[] flattenedVertices = new Vector3[numberOfCharacters * numberOfVertices];
+        for (int sk=0; sk<skeletons.Length; sk++) {
+            for (int vid=0; vid<numberOfVertices; vid++){
+                flattenedVertices[vid + sk * numberOfVertices] = linearBlendSkinnedSkeletonMeshesVerticesWithHierarchy[sk][vid];
+            }
+        }
+        
         #region GPU initializations
         // Implement for 4 infuence joints max
         // Prepare data and compute buffers with static data
@@ -210,7 +223,6 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         Vector4[] verticesOffsetsAtTPoseForShader = new Vector4[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS * numberOfCharacters];
         int[] influenceJointsIdsPerVertexForShader = new int[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS];
         float[] skinningWeightsPerVertexForShader = new float[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS];
-
         
         for (int vid=0; vid<numberOfVertices; vid++) {
                 
@@ -239,6 +251,11 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         // Initialize the vertices buffer
         _verticesBuffer = new ComputeBuffer(numberOfVertices * 4 * numberOfCharacters, sizeof(float));
         LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_VertexBuffer", _verticesBuffer);
+        for (int sk=0; sk<numberOfCharacters; sk++) {
+            skeletonMeshes[sk].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
+        }
+        // skeletonMeshes[0].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
+        // skeletonMeshes[1].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
 
         animatedJointPositionsBuffer = new ComputeBuffer(inputBones.Length * 4 * numberOfCharacters, sizeof(float));
 
@@ -358,27 +375,10 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
             // ComputeBuffer jointsAccumRotationsBuffer = new ComputeBuffer(inputBones.Length*16, sizeof(float));
             jointsAccumRotationsBuffer.SetData(allSkeletonsJointsAccumulatedRotations1D);
 
-            flattenedVertices = new float[numberOfVertices * 4 * numberOfCharacters];
-
-            _verticesBuffer.SetData(flattenedVertices);
             LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_AnimatedJointPositions", animatedJointPositionsBuffer);
             LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_JointsAccumulatedRotations", jointsAccumRotationsBuffer);
             
             LinearBlendSkinningMultipleCharactersComputeShader.Dispatch(kernelId, Mathf.CeilToInt(numberOfVertices / 1024.0f), numberOfCharacters, 1);
-            _verticesBuffer.GetData(flattenedVertices);
-
-            // LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(LinearBlendSkinningMultipleCharactersComputeShader.FindKernel("SetVerticesToZero"), "_VertexBuffer", _verticesBuffer);
-            // LinearBlendSkinningMultipleCharactersComputeShader.Dispatch(LinearBlendSkinningMultipleCharactersComputeShader.FindKernel("SetVerticesToZero"), Mathf.CeilToInt(numberOfVertices / 1024.0f), numberOfCharacters, 1);
-
-            // From flattened to vector3 array
-            Vector3[] newVertices;
-            for (int sk=0; sk<numberOfCharacters; sk++) {
-                newVertices = new Vector3[numberOfVertices];
-                for (int vid=0; vid<numberOfVertices; vid++) {
-                    newVertices[vid] = new Vector3(flattenedVertices[vid*4 + sk * numberOfVertices * 4], flattenedVertices[vid*4 + 1 + sk * numberOfVertices * 4], flattenedVertices[vid*4 + 2 + sk * numberOfVertices * 4]);
-                }
-                skeletonMeshes[sk].GetComponent<MeshFilter>().mesh.vertices = newVertices;
-            }
         }
         
     }
@@ -450,14 +450,13 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         return newVerticesPositions;
     }
 
-    // void OnApplicationQuit()
-    // {
-    //     _verticesBuffer.Release();
-    //     animatedJointPositionsBuffer.Release();
-    //     verticesOffsetsAtTPoseBuffer.Release();
-    //     influenceJointsIdsPerVertexBuffer.Release();
-    //     skinningWeightsPerVertexBuffer.Release();
-    //     influenceJointsNumberPerVertexBuffer.Release();
-    //     jointsAccumRotationsBuffer.Release();
-    // }
+    void OnApplicationQuit()
+    {
+        _verticesBuffer.Release();
+        animatedJointPositionsBuffer.Release();
+        verticesOffsetsAtTPoseBuffer.Release();
+        influenceJointsIdsPerVertexBuffer.Release();
+        skinningWeightsPerVertexBuffer.Release();
+        jointsAccumRotationsBuffer.Release();
+    }
 }
