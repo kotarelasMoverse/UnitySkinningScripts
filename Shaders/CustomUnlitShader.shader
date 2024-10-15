@@ -12,6 +12,8 @@ Shader "Unlit/CustomUnlitShader"
 
         Pass
         {
+            Tags {"LightMode"="ForwardBase"}
+
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
@@ -20,6 +22,7 @@ Shader "Unlit/CustomUnlitShader"
             #pragma target 3.5
 
             #include "UnityCG.cginc"
+            #include "UnityLightingCommon.cginc" // for _LightColor0
 
             struct appdata
             {
@@ -28,10 +31,12 @@ Shader "Unlit/CustomUnlitShader"
             };
 
             StructuredBuffer<float4> _NewVertexPosBuffer;
+            StructuredBuffer<float4> _NewNormalBuffer;
 
             struct v2f
             {
                 float4 vertex : SV_POSITION;
+                fixed4 diff : COLOR0; // diffuse lighting color
             };
 
             sampler2D _MainTex;
@@ -43,6 +48,10 @@ Shader "Unlit/CustomUnlitShader"
                 v2f o;
                 float3 newPos = float3(_NewVertexPosBuffer[v.vid + 6890*_ModelID][0], _NewVertexPosBuffer[v.vid + 6890*_ModelID][1], _NewVertexPosBuffer[v.vid + 6890*_ModelID][2]);
                 o.vertex = UnityObjectToClipPos(newPos);
+                float3 newNormal = float3(_NewNormalBuffer[v.vid + 6890*_ModelID][0], _NewNormalBuffer[v.vid + 6890*_ModelID][1], _NewNormalBuffer[v.vid + 6890*_ModelID][2]);
+                half3 worldNormal = UnityObjectToWorldNormal(newNormal);
+                half nl = max(0, dot(worldNormal, _WorldSpaceLightPos0.xyz));
+                o.diff = nl * _LightColor0;
                 return o;
             }
 
@@ -52,6 +61,7 @@ Shader "Unlit/CustomUnlitShader"
             {
                 // sample the texture
                 fixed4 col = _Color;
+                col *= i.diff;
                 return col;
             }
             ENDCG

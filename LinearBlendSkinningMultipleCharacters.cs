@@ -36,9 +36,11 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
     public ComputeShader LinearBlendSkinningMultipleCharactersComputeShader;
     int kernelId;
     private ComputeBuffer _verticesBuffer;
+    private ComputeBuffer _normalsBuffer;
     ComputeBuffer animatedJointPositionsBuffer;
     // ComputeBuffer verticesInfoBuffer;
     ComputeBuffer verticesOffsetsAtTPoseBuffer;
+    ComputeBuffer normalsAtTPoseBuffer;
     ComputeBuffer influenceJointsIdsPerVertexBuffer;
     ComputeBuffer skinningWeightsPerVertexBuffer;
     ComputeBuffer jointsAccumRotationsBuffer;
@@ -72,6 +74,7 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         // Extract vertices position in T-pose, the position are in local coordinate system with center the center of the mesh (average of all the vertices positions and position of the mesh object)
         Mesh inputMesh = rend.sharedMesh;
         Vector3[] inputVerticesLocalCoord = inputMesh.vertices;
+        Vector3[] inputVertexNormals = inputMesh.normals;
         numberOfVertices = inputVerticesLocalCoord.Length;
         Debug.Log("Clone mesh vertex number " + numberOfVertices);
 
@@ -221,6 +224,7 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         // Prepare data and compute buffers with static data
         
         Vector4[] verticesOffsetsAtTPoseForShader = new Vector4[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS * numberOfCharacters];
+        Vector4[] normalsAtTPoseForShader = new Vector4[numberOfVertices * numberOfCharacters];
         int[] influenceJointsIdsPerVertexForShader = new int[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS];
         float[] skinningWeightsPerVertexForShader = new float[numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS];
         
@@ -237,6 +241,7 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
                 for (int sk=0; sk<numberOfCharacters; sk++) {
 
                     verticesOffsetsAtTPoseForShader[vid*4 + j + sk * numberOfVertices * 4] = verticesAndJointsOffsets[vid][influenceJointId];
+                    normalsAtTPoseForShader[vid + sk * numberOfVertices] = inputVertexNormals[vid];
                 }
             }
         }
@@ -251,8 +256,11 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         // Initialize the vertices buffer
         _verticesBuffer = new ComputeBuffer(numberOfVertices * 4 * numberOfCharacters, sizeof(float));
         LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_VertexBuffer", _verticesBuffer);
+        _normalsBuffer = new ComputeBuffer(numberOfVertices * 4 * numberOfCharacters, sizeof(float));
+        LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_NormalsBuffer", _normalsBuffer);
         for (int sk=0; sk<numberOfCharacters; sk++) {
             skeletonMeshes[sk].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
+            skeletonMeshes[sk].GetComponent<MeshRenderer>().material.SetBuffer("_NewNormalBuffer", _normalsBuffer);
         }
         // skeletonMeshes[0].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
         // skeletonMeshes[1].GetComponent<MeshRenderer>().material.SetBuffer("_NewVertexPosBuffer", _verticesBuffer);
@@ -262,6 +270,10 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
         verticesOffsetsAtTPoseBuffer = new ComputeBuffer(numberOfVertices * 4 * NUMBER_OF_INFLUENCE_JOINTS * numberOfCharacters, sizeof(float));
         verticesOffsetsAtTPoseBuffer.SetData(verticesOffsetsAtTPoseForShader);
         LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_VerticesOffsetsAtTPose", verticesOffsetsAtTPoseBuffer);
+
+        normalsAtTPoseBuffer = new ComputeBuffer(numberOfVertices * 4 * numberOfCharacters, sizeof(float));
+        normalsAtTPoseBuffer.SetData(normalsAtTPoseForShader);
+        LinearBlendSkinningMultipleCharactersComputeShader.SetBuffer(kernelId, "_NormalsAtTPose", normalsAtTPoseBuffer);
 
         influenceJointsIdsPerVertexBuffer = new ComputeBuffer(numberOfVertices * NUMBER_OF_INFLUENCE_JOINTS, sizeof(int));
         influenceJointsIdsPerVertexBuffer.SetData(influenceJointsIdsPerVertexForShader);
@@ -453,8 +465,10 @@ public class LinearBlendSkinningMultipleCharacters : MonoBehaviour
     void OnApplicationQuit()
     {
         _verticesBuffer.Release();
+        _normalsBuffer.Release();
         animatedJointPositionsBuffer.Release();
         verticesOffsetsAtTPoseBuffer.Release();
+        normalsAtTPoseBuffer.Release();
         influenceJointsIdsPerVertexBuffer.Release();
         skinningWeightsPerVertexBuffer.Release();
         jointsAccumRotationsBuffer.Release();
